@@ -9,15 +9,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.poi.ss.usermodel.Comment;
+import org.apache.poi.common.usermodel.HyperlinkType;
+import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.ClientAnchor;
+import org.apache.poi.ss.usermodel.Comment;
 import org.apache.poi.ss.usermodel.CreationHelper;
 import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.Drawing;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
+import org.apache.poi.ss.usermodel.Hyperlink;
 import org.apache.poi.ss.usermodel.RichTextString;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.util.CellRangeAddress;
@@ -37,10 +40,7 @@ public class Timesheet {
 			FileInputStream file = new FileInputStream("D:\\Template.xlsx");
 			XSSFWorkbook outputWorkbook = new XSSFWorkbook(file);
 			XSSFSheet formatedWorksheet = outputWorkbook.createSheet("EmployeeData");
-			
-			/*FileInputStream hearderFile = new FileInputStream("D:\\HeaderSheet.xlsx");
-			XSSFSheet worksheet = new XSSFWorkbook(hearderFile).getSheetAt(0);
-			XSSFSheet headerWorkSheet = outputWorkbook.createSheet("HeaderSheet");*/
+			XSSFSheet headerSheet = outputWorkbook.getSheet("HeaderSheet");
 
 			int[] columnRangeToBeRead =  findColumnRangeAndTime(inputWorkSheet);
 			writeDataToNewSheet(inputWorkSheet, formatedWorksheet, columnRangeToBeRead);
@@ -70,26 +70,35 @@ public class Timesheet {
 			staticHeaderDetails.put("Total days", "G8");
 			staticHeaderDetails.put("Total Hrs", "I8");
 
+			Map<String, String> headerSheetDetails = new HashMap<String, String>();
+			headerSheetDetails.put("Project", "E3");
+			headerSheetDetails.put("Supplier", "E4");
+			headerSheetDetails.put("month", "E5");
+			headerSheetDetails.put("Start date", "E6");
+			headerSheetDetails.put("End date", "K6");
+			headerSheetDetails.put("totalHeaderdays", "J31");
+			headerSheetDetails.put("totalHeaderHours", "K31");
+
 			int month = columnRangeToBeRead[2];
 			int year = columnRangeToBeRead[3] - 1900;
-			generateEmployeeData(outputWorkbook, formatedWorksheet, month, year, activityMap, shiftTimeMap, staticHeaderDetails);
+			generateEmployeeData(outputWorkbook, formatedWorksheet, headerSheet, month, year, activityMap, shiftTimeMap, staticHeaderDetails, headerSheetDetails);
 
 			outputWorkbook.removeSheetAt(0);
 			outputWorkbook.removeSheetAt(outputWorkbook.getSheetIndex("EmployeeData"));
 
 			FileOutputStream outputFile = new FileOutputStream(new File("D:\\update.xlsx"));
 			outputWorkbook.write(outputFile);
-			
+
 			outputFile.close();
 			inputFile.close();
-			
+
 		} catch (Exception e) {
 			System.out.println("Exception Occured" + e.getMessage());
 			e.printStackTrace();
 		}
 	}
 
-	private static void generateEmployeeData(XSSFWorkbook outputWorkbook, XSSFSheet formatedWorksheet, int month, int year, Map<String, String> activityMap, Map<String, String[]> shiftTimeMap, Map<String, String> staticHeaderDetails) {
+	private static void generateEmployeeData(XSSFWorkbook outputWorkbook, XSSFSheet formatedWorksheet, XSSFSheet headerSheet, int month, int year, Map<String, String> activityMap, Map<String, String[]> shiftTimeMap, Map<String, String> staticHeaderDetails, Map<String, String> headerSheetDetails) {
 		int readRow = 1;
 		int weekCell = 1;
 		int activityCell = 2;
@@ -101,14 +110,18 @@ public class Timesheet {
 		int locationCell = 10;
 		int remarksCell = 11;
 		int totalHoursCell = 42;
+		int headerWriteRow = 11;
+		int slNumber = 1;
+		int totalHeaderHours = 0;
+		int totalHeaderdays = 0;
+		Map<String, Object> staticHeaderValues = new HashMap<String, Object>();
 
 		while (readRow <= formatedWorksheet.getLastRowNum()) {
-
 			Row row =  formatedWorksheet.getRow(readRow++);
 			int startCell = 4;
 			int endCell = row.getLastCellNum();
+			
 			if (row != null && row.getCell(startCell) != null) {
-
 				XSSFSheet clonedSheet =  outputWorkbook.cloneSheet(0);
 				int writeRow = 11;
 				int totalHours = 0;
@@ -117,11 +130,18 @@ public class Timesheet {
 
 				while(startCell < endCell) {
 					String activity = "WO";
+					
+					@SuppressWarnings("deprecation")
+					Date date = new Date(year, month, startDate++);
+					Calendar calendar = Calendar.getInstance();
+					calendar.setTime(date);
+
 					int hours = 0;
 					String officeIntTime = null;
 					String OfficeOutTime = null;
 					String finalWorkEndTme = null;
 					String location = "Bangalore";
+					RichTextString remarks = null;
 
 					Cell cell = row.getCell(startCell++);
 					if(cell != null && CellType.BLANK != cell.getCellType()) {
@@ -137,16 +157,14 @@ public class Timesheet {
 								finalWorkEndTme = str[1];
 							}
 						} 
+						totalHours = totalHours + hours;
+						if(cell.getStringCellValue().equals("S1") || cell.getStringCellValue().equals("S2") || cell.getStringCellValue().equals("CO")) {
+							daysCount = daysCount + 1;
+						}
+						if(cell.getCellComment() != null) {
+							remarks = cell.getCellComment().getString();
+						}
 					}
-					totalHours = totalHours + hours;
-					if(cell.getStringCellValue().equals("S1") || cell.getStringCellValue().equals("S2") || cell.getStringCellValue().equals("CO")) {
-						daysCount = daysCount + 1;
-					}
-					@SuppressWarnings("deprecation")
-					Date date = new Date(year, month, startDate++);
-					Calendar calendar = Calendar.getInstance();
-					calendar.setTime(date);
-					
 					writeStringToCell(clonedSheet, writeRow, weekCell, "W"+calendar.get(Calendar.WEEK_OF_YEAR));
 					writeStringToCell(clonedSheet, writeRow, activityCell, activity);
 					writeDateToCell(outputWorkbook, clonedSheet, writeRow, dateCell, date);
@@ -155,17 +173,11 @@ public class Timesheet {
 					writeStringToCell(clonedSheet, writeRow, officeOutTimeCell, OfficeOutTime);
 					writeStringToCell(clonedSheet, writeRow, finalWorkEndTimeCell, finalWorkEndTme);
 					writeStringToCell(clonedSheet, writeRow, locationCell, location);
-
-					RichTextString remarks = null;
-					if(cell.getCellComment() != null) {
-						remarks = cell.getCellComment().getString();
-					}
 					writeRichStringToCell(clonedSheet, writeRow, remarksCell, remarks);
 					writeRow++;
 				}
 				writeIntToCell(clonedSheet, totalHoursCell, hoursCell, totalHours);
 
-				Map<String, Object> staticHeaderValues = new HashMap<String, Object>();
 				staticHeaderValues.put("Project", "ITSM");
 				staticHeaderValues.put("Supplier", "Vyom Labs Pvt. Ltd.");
 				staticHeaderValues.put("month", new DateFormatSymbols().getMonths()[month]+"-"+(1900+year));
@@ -196,26 +208,97 @@ public class Timesheet {
 							cellStyle.setDataFormat(dateFormat);
 							referedCell.setCellValue((Date) staticHeaderValues.get(str));
 							referedCell.setCellStyle(cellStyle);
+							referedCell.getCellStyle().setBorderTop(BorderStyle.THIN);
 						}
 					}
 				}
+				totalHeaderHours = totalHeaderHours + totalHours;
+				totalHeaderdays = totalHeaderdays + daysCount;
+				writeToHeaderSheet(outputWorkbook, headerSheet, staticHeaderValues, headerWriteRow++, slNumber++);
 
-				String employeeNumber = row.getCell(0).getStringCellValue();
+				String employeeNumber = row.getCell(3).getStringCellValue();
 				outputWorkbook.setSheetName(outputWorkbook.getSheetIndex(clonedSheet), employeeNumber);
+			}
+		}
+
+		staticHeaderValues.put("totalHeaderHours", totalHeaderHours);
+		staticHeaderValues.put("totalHeaderdays", totalHeaderdays);
+
+		for(String str : headerSheetDetails.keySet()) {
+			if(staticHeaderValues.containsKey(str)) {
+				CellReference cr = new CellReference(headerSheetDetails.get(str));
+				Cell referedCell = headerSheet.getRow(cr.getRow()).getCell(cr.getCol());
+				Object obj = staticHeaderValues.get(str);
+				if(obj instanceof String) {
+					referedCell.setCellValue((String) staticHeaderValues.get(str));
+				} else if(obj instanceof Double){
+					referedCell.setCellValue((Double)staticHeaderValues.get(str));
+				} else if(obj instanceof Integer){
+					referedCell.setCellValue((Integer)staticHeaderValues.get(str));
+				} else {
+					CellStyle cellStyle = outputWorkbook.createCellStyle();
+					CreationHelper creationHelper = outputWorkbook.getCreationHelper();
+					short dateFormat = creationHelper.createDataFormat().getFormat("mm/dd/yyyy");
+					cellStyle.setDataFormat(dateFormat);
+					referedCell.setCellValue((Date) staticHeaderValues.get(str));
+					referedCell.setCellStyle(cellStyle);
+					referedCell.getCellStyle().setAlignment(HorizontalAlignment.CENTER);
+					referedCell.getCellStyle().setBorderBottom(BorderStyle.THIN);
+					referedCell.getCellStyle().setBorderRight(BorderStyle.THIN);
+				}
+			} 
+		}
+	}
+
+	private static void writeToHeaderSheet(XSSFWorkbook outputWorkbook, XSSFSheet headerSheet, Map<String, Object> staticHeaderValues, int headerWriteRow, int slNumber) {
+		Map<String, Integer> headerSheetCellMap = new HashMap<String, Integer>();
+		headerSheetCellMap.put("PONumber", 2);
+		headerSheetCellMap.put("Resource Name", 3);
+		headerSheetCellMap.put("Total days", 9);
+		headerSheetCellMap.put("Total Hrs", 10);
+		int slCell = 1;
+
+		writeIntToCell(headerSheet, headerWriteRow, slCell, slNumber);
+		for(String str : headerSheetCellMap.keySet()) {
+			if(staticHeaderValues.containsKey(str)) {
+				Object obj = staticHeaderValues.get(str);
+				if(obj instanceof String) {
+					writeStringToCellwithHyperLink(outputWorkbook, headerSheet, headerWriteRow, headerSheetCellMap.get(str), (String) staticHeaderValues.get(str));
+				} else if(obj instanceof Integer) {
+					writeIntToCell(headerSheet, headerWriteRow, headerSheetCellMap.get(str), (int) staticHeaderValues.get(str));
+				} else if(obj instanceof Double) {
+					writeDoubleToCell(headerSheet, headerWriteRow, headerSheetCellMap.get(str), (double) staticHeaderValues.get(str));
+				}
 			}
 		}
 	}
 
-	private static void writeRichStringToCell(XSSFSheet clonedSheet, int writeRow, int remarksCell, RichTextString remarks) {
-		Cell dataCell = clonedSheet.getRow(writeRow).getCell(remarksCell);
+	private static void writeStringToCellwithHyperLink(XSSFWorkbook outputWorkbook, XSSFSheet clonedSheet, int rowNum, int cellNum, String content) {
+		Cell dataCell = clonedSheet.getRow(rowNum).getCell(cellNum);
 		dataCell.getCellStyle().setAlignment(HorizontalAlignment.CENTER);
-		dataCell.setCellValue(remarks);
+		dataCell.setCellValue(content);
+		CreationHelper createHelper = outputWorkbook.getCreationHelper();
+		Hyperlink link = createHelper.createHyperlink(HyperlinkType.DOCUMENT);
+		link.setAddress(content+"!A1");
+		dataCell.setHyperlink(link);
 	}
 
-	private static void writeIntToCell(XSSFSheet clonedSheet, int writeRow,	int hoursCell, int hours) {
-		Cell dataCell = clonedSheet.getRow(writeRow).getCell(hoursCell);
+	private static void writeRichStringToCell(XSSFSheet clonedSheet, int writeRow, int cellNum, RichTextString content) {
+		Cell dataCell = clonedSheet.getRow(writeRow).getCell(cellNum);
 		dataCell.getCellStyle().setAlignment(HorizontalAlignment.CENTER);
-		dataCell.setCellValue(hours);
+		dataCell.setCellValue(content);
+	}
+
+	private static void writeIntToCell(XSSFSheet clonedSheet, int writeRow,	int cellNum, int content) {
+		Cell dataCell = clonedSheet.getRow(writeRow).getCell(cellNum);
+		dataCell.getCellStyle().setAlignment(HorizontalAlignment.CENTER);
+		dataCell.setCellValue(content);
+	}
+
+	private static void writeDoubleToCell(XSSFSheet clonedSheet, int writeRow,	int cellNum, double content) {
+		Cell dataCell = clonedSheet.getRow(writeRow).getCell(cellNum);
+		dataCell.getCellStyle().setAlignment(HorizontalAlignment.CENTER);
+		dataCell.setCellValue(content);
 	}
 
 	private static void writeDateToCell(XSSFWorkbook outputWorkbook, XSSFSheet clonedSheet, int writeRow, int dateCell, Date date) {
