@@ -1,0 +1,156 @@
+import xlwings as xw
+from openpyxl import load_workbook
+from datetime import datetime
+import time
+import datetime
+from openpyxl import Workbook
+from xlwings import Range, constants
+from openpyxl import load_workbook
+from datetime import datetime
+import time
+import datetime
+from openpyxl import Workbook
+from openpyxl.styles import Alignment
+from dateutil.relativedelta import relativedelta
+from openpyxl.styles import Color, PatternFill, Font, Border
+from datetime import date, timedelta
+from openpyxl.styles import Border, Side
+
+def ReadColrange(rm,cm,ws):
+    for i in range(1,rm+1):
+        for j in range(1,cm+1):
+            if i==2 and j>5:
+                val=ws.cell(row=i,column=j).value
+                if val!=None:
+                    d=str(val).split(" ")[0]
+                    if d!='Day':
+
+                        if int(d.split("-")[1])==int(now):
+
+                            colrange.append(j)
+    return colrange
+
+def copyexcel(inputsheet,outputsheet,outputsheetname):
+    wb1 = xw.Book(inputsheet)
+
+    wb2 = xw.Book(outputsheet)
+
+    ws1 = wb1.sheets(1)
+    ws1.name =outputsheetname
+    ws1.api.Copy(Before=wb2.sheets(1).api)
+    wb2.save()
+    wb2.app.quit()
+
+
+def FillTemplate(ws, rm, wbr, colrange, sheet,Outputpath):
+    for i in range(4, rm + 1):
+        ResourceName = ws.cell(row=i, column=4).value
+        ResourceID = ws.cell(row=i, column=1).value
+        PONumber = ws.cell(row=i, column=2).value
+        Role = ws.cell(row=i, column=3).value
+        r = 12
+        islastday = False
+        daycount = 1
+        hourscount = 0
+        if ResourceID != None:
+            wsr = wbr.get_sheet_by_name(ResourceName)
+        for j in range(int(colrange[0]), int(colrange[1])):
+            val = ws.cell(row=i, column=j).value
+            try:
+                cmt = ws.cell(row=i, column=j).comment.text
+            except:
+                cmt = ""
+            if ResourceID != None:
+
+                try:
+                    if int(val) >= 0:
+                        islastday = True
+                        wsr.cell(row=43, column=7).value = int(val) * 8
+                        wsr.cell(row=8, column=7).value = val
+                        wsr.cell(row=8, column=9).value = int(val) * 8
+                except:
+                    pass
+                if not islastday:
+                    datetoenter = str(daycount) + "/" + m + "/" + y
+                    #weeknumber = datetime.date(int(y), int(m), daycount).isocalendar()[1]
+                    #wsr.cell(row=r, column=2).value = "W" + str(weeknumber)
+                    wsr.cell(row=r, column=2).value = "W" + str("WK")
+                    #wsr.merge_cells('C' + str(r) + ':E' + str(r))
+                    #cell = wsr.cell(row=r, column=3)
+                    #cell.alignment = Alignment(horizontal='center', vertical='center')
+                    wsr.cell(row=r, column=3).value = activityMap[val]
+                    if activityMap[val] == 'WO':
+                        Fill6 = PatternFill(start_color='00808080', end_color='00808080', fill_type='solid')
+                        fillingcolor(Fill6, r, 3, 6, wsr, wbr)
+
+                    wsr.cell(row=r, column=6).value = datetoenter
+                    wsr.cell(row=r, column=7).value = Timings[val][2]
+                    wsr.cell(row=r, column=8).value = Timings[val][0]
+                    wsr.cell(row=r, column=9).value = Timings[val][1]
+                    wsr.cell(row=r, column=10).value = Timings[val][1]
+                    wsr.cell(row=r, column=11).value = 'Bangalore'
+                    #wsr.merge_cells('L' + str(r) + ':N' + str(r))
+                    #cell = wsr.cell(row=r, column=12)
+                    #cell.alignment = Alignment(horizontal='center', vertical='center')
+                    wsr.cell(row=r, column=12).value = cmt
+                    r += 1
+                    daycount += 1
+                    hourscount += int(Timings[val][2])
+        #GenerateTemplate(wsr, wbr, sheet, PONumber, ResourceName, ResourceID, Role)
+        wbr.save(outputpath)
+
+
+def numtochar(colstart,colend):
+    alphabet=list('abcdefghijklmnopqrstuvwxyz')
+    res=[]
+    for i in range(colstart,colend):
+        res.append(alphabet[i-1])
+    return res
+
+def fillingcolor(Fill,rownum,colstart,colend,wsr,wbr):
+    res=[]
+    res=numtochar(colstart, colend)
+    for i in res:
+        wsr[i+str(rownum)].fill=Fill
+    wbr.save('output.xlsx')
+
+
+last_month = datetime.datetime.now() - relativedelta(months=1)
+monthname = format(last_month, '%B')
+last_day_of_prev_month = date.today().replace(day=1) - timedelta(days=1)
+start_day_of_prev_month = date.today().replace(day=1) - timedelta(days=last_day_of_prev_month.day)
+now = str(datetime.datetime.now()).split(" ")[0]
+now=str(int(now.split("-")[1])-1)
+today = datetime.date.today()
+first = today.replace(day=1)
+lastMonth = first - datetime.timedelta(days=1)
+y=lastMonth.strftime("%Y")
+m=lastMonth.strftime("%m")
+
+wbr=Workbook()
+
+templatevalues={'header':'B2','Project':'C3','Supplier':'C4'}
+activityMap={'S1':'Workedin Airbus','S2':'Worked in Airbus',"HW":"Holiday Work","L":"Leave","CO":"Compoff","WFH":"Worked in airbus",'IH':'Indian Holiday',None:'WO'}
+Timings={'S1':('10:30','18:30','8'),'S2':('13:30','22:30','8'),'WFH':('0','0','0'),'CO':('0','0','0'),'IH':('0','0','0'),'L':('0','0','0'),'HW':('0','0','8'),None:('0','0','0')}
+wb=load_workbook("MasterSheet.xlsx")
+Templatepath="Template.xlsx"
+sheets=wb.sheetnames
+outputpath="output1.xlsx"
+wbr.save(outputpath)
+for sheet in sheets:
+    ws = wb[sheet]
+    rm = ws.max_row
+    cm = ws.max_column
+    colrange = []
+    colrange = ReadColrange(rm, cm, ws)
+    for i in range(4, rm + 1):
+        ResourceID = ws.cell(row=i, column=1).value
+        ResourceName = ws.cell(row=i, column=4).value
+        print(ResourceID,ResourceName)
+        if ResourceID != None:
+            copyexcel(Templatepath, outputpath, ResourceName)
+    wbr=load_workbook(outputpath)
+
+
+    FillTemplate(ws,rm,wbr,colrange,sheet,outputpath)
+
